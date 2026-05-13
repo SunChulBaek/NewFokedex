@@ -8,7 +8,7 @@ class PokemonDetail with _$PokemonDetail {
   const factory PokemonDetail({
     required int id,
     required String name,
-    required int baseExperience,
+    @JsonKey(name: 'base_experience') required int baseExperience,
     required int height,
     required int weight,
     required List<PokemonType> types,
