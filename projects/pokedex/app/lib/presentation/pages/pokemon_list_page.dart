@@ -33,9 +33,10 @@ class PokemonListPage extends ConsumerWidget {
     final koreanNames = ref.watch(koreanNamesProvider);
     final typesMap = ref.watch(pokemonTypesProvider);
 
-    // 검색어가 있으면 전체 인덱스에서 검색, 없으면 페이징 목록 사용
+    // 검색어 또는 세대/타입 필터가 있으면 전체 인덱스 사용, 없으면 페이징 목록 사용
+    final needFullIndex = searchQuery.isNotEmpty || selectedGen != null || selectedType != null;
     final baseItems =
-        searchQuery.isNotEmpty && indexState.isReady
+        needFullIndex && indexState.isReady
             ? indexState.allItems
             : state.items;
 
@@ -156,7 +157,7 @@ class PokemonListPage extends ConsumerWidget {
                   ),
                 ),
               )
-            else if (searchQuery.isNotEmpty && indexState.isLoading)
+            else if (needFullIndex && indexState.isLoading)
               const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
               )
