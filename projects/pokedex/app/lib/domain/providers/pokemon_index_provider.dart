@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import '../../data/models/pokemon_list_item.dart';
 import '../../data/repositories/pokemon_repository.dart';
 
@@ -28,10 +29,15 @@ class PokemonIndexNotifier extends StateNotifier<PokemonIndexState> {
   Future<void> _load() async {
     state = const PokemonIndexState(isLoading: true);
     try {
-      final items = await _repository.getFullPokemonIndex();
+      final items = await Future.any([
+        _repository.getFullPokemonIndex(),
+        Future.delayed(const Duration(seconds: 3), () => <PokemonListItem>[]),
+      ]);
       state = PokemonIndexState(allItems: items);
     } catch (e) {
       state = PokemonIndexState(error: e.toString());
+    } finally {
+      FlutterNativeSplash.remove();
     }
   }
 }
