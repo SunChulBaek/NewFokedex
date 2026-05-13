@@ -28,6 +28,21 @@ class PokemonRepository {
         .toList();
   }
 
+  /// 특정 타입에 속한 포켓몬 ID 목록 반환
+  Future<Set<int>> getPokemonIdsByType(String type) async {
+    final data = await _client.getPokemonByType(type);
+    final entries = (data['pokemon'] as List);
+    final ids = <int>{};
+    for (final e in entries) {
+      final url = e['pokemon']?['url'] as String?;
+      if (url == null) continue;
+      final segments = Uri.parse(url).pathSegments.where((s) => s.isNotEmpty).toList();
+      final id = int.tryParse(segments.last);
+      if (id != null) ids.add(id);
+    }
+    return ids;
+  }
+
   Future<({List<PokemonListItem> items, bool hasMore})> getPokemonList({
     required int page,
   }) async {

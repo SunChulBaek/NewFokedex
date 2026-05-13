@@ -6,7 +6,7 @@ import '../../domain/providers/pokemon_list_provider.dart';
 import '../../domain/providers/pokemon_index_provider.dart';
 import '../../domain/providers/generation_filter_provider.dart';
 import '../../domain/providers/korean_names_provider.dart';
-import '../../domain/providers/pokemon_types_provider.dart';
+import '../../domain/providers/pokemon_type_ids_provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/type_colors.dart';
 import '../../core/theme/app_theme.dart';
@@ -31,7 +31,13 @@ class PokemonListPage extends ConsumerWidget {
     final selectedType = ref.watch(selectedTypeProvider);
     final selectedGen = ref.watch(selectedGenerationProvider);
     final koreanNames = ref.watch(koreanNamesProvider);
-    final typesMap = ref.watch(pokemonTypesProvider);
+    final typeIdsMap = ref.watch(pokemonTypeIdsProvider);
+    final typeIdsNotifier = ref.read(pokemonTypeIdsProvider.notifier);
+
+    // 타입 필터 선택 시 해당 타입 ID 목록 fetch
+    if (selectedType != null) {
+      typeIdsNotifier.fetchIfAbsent(selectedType);
+    }
 
     // 검색어 또는 세대/타입 필터가 있으면 전체 인덱스 사용, 없으면 페이징 목록 사용
     final needFullIndex = searchQuery.isNotEmpty || selectedGen != null || selectedType != null;
@@ -56,12 +62,12 @@ class PokemonListPage extends ConsumerWidget {
             return item.id >= range.start && item.id <= range.end;
           })();
 
-      // 타입 필터: 타입 정보가 없으면 표시, 있으면 필터링
+      // 타입 필터: /type/{name} API 결과로 정확히 필터링
       final matchesType = selectedType == null ||
           (() {
-            final types = typesMap[item.id];
-            if (types == null) return true; // 아직 로드 안됨 → 표시
-            return types.contains(selectedType);
+            final ids = typeIdsMap[selectedType];
+            if (ids == null) return true; // 아직 fetch 중 → 일단 표시
+            return ids.contains(item.id);
           })();
 
       return matchesSearch && matchesGen && matchesType;
@@ -158,6 +164,10 @@ class PokemonListPage extends ConsumerWidget {
                 ),
               )
             else if (needFullIndex && indexState.isLoading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            else if (selectedType != null && !typeIdsMap.containsKey(selectedType))
               const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
               )
