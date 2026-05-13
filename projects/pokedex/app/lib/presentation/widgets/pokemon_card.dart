@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../data/models/pokemon_list_item.dart';
 import '../../domain/providers/favorites_provider.dart';
+import '../../domain/providers/korean_names_provider.dart';
 import '../../core/constants/type_colors.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -53,6 +54,15 @@ class _PokemonCardState extends ConsumerState<PokemonCard>
   @override
   Widget build(BuildContext context) {
     final isFav = ref.watch(favoritesProvider).contains(widget.item.id);
+    final koreanNames = ref.watch(koreanNamesProvider);
+    final korName = koreanNames[widget.item.id];
+
+    // 한국어 이름 없으면 lazy fetch 요청
+    if (korName == null) {
+      ref.read(koreanNamesProvider.notifier).requestIfAbsent(widget.item.id);
+    }
+
+    final displayName = korName ?? _capitalize(widget.item.name);
     // 타입 컬러를 가져오기 위해 ID 기반으로 primaryType은 추후 로드될 때까지 노말로 fallback
     // PokemonCard는 목록에서 사용되므로 타입 정보 없이 컬러는 기본값 사용
     // 상세 데이터 없이 spriteUrl만 사용하므로 타입은 모름 → 배경은 회색 계열 fallback
@@ -107,18 +117,19 @@ class _PokemonCardState extends ConsumerState<PokemonCard>
                             .textTheme
                             .labelSmall
                             ?.copyWith(
-                              color: AppTheme.outline,
+                              color: const Color(0xFF757575),
                               fontFamily: 'Rajdhani',
                               fontWeight: FontWeight.w600,
                             ),
                       ),
                       Text(
-                        _capitalize(widget.item.name),
+                        displayName,
                         style: Theme.of(context)
                             .textTheme
                             .titleMedium
                             ?.copyWith(
                               fontWeight: FontWeight.bold,
+                              color: const Color(0xFF1C1B1F),
                             ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
