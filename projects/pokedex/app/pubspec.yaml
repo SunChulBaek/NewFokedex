@@ -35,6 +35,9 @@ dependencies:
   # 로컬 저장소
   shared_preferences: ^2.2.2
 
+  # 오디오 재생
+  audioplayers: ^6.0.0
+
   # 데이터 모델
   freezed_annotation: ^2.4.1
   json_annotation: ^4.8.1
@@ -49,6 +52,24 @@ dev_dependencies:
   freezed: ^2.4.6
   json_serializable: ^6.7.1
   riverpod_generator: ^2.3.9
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.3.9
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#CC0000"
+  image: assets/splash/splash.png
+  android: true
+  ios: true
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/icon/
+    - assets/splash/

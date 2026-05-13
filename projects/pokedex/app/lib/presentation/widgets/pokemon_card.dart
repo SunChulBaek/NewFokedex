@@ -6,8 +6,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../data/models/pokemon_list_item.dart';
 import '../../domain/providers/favorites_provider.dart';
 import '../../domain/providers/korean_names_provider.dart';
+import '../../domain/providers/pokemon_types_provider.dart';
 import '../../core/constants/type_colors.dart';
 import '../../core/theme/app_theme.dart';
+import 'type_badge.dart';
 
 class PokemonCard extends ConsumerStatefulWidget {
   final PokemonListItem item;
@@ -55,18 +57,26 @@ class _PokemonCardState extends ConsumerState<PokemonCard>
   Widget build(BuildContext context) {
     final isFav = ref.watch(favoritesProvider).contains(widget.item.id);
     final koreanNames = ref.watch(koreanNamesProvider);
-    final korName = koreanNames[widget.item.id];
+    final typesMap = ref.watch(pokemonTypesProvider);
 
-    // 한국어 이름 없으면 lazy fetch 요청
+    // Korean name lazy fetch
+    final korName = koreanNames[widget.item.id];
     if (korName == null) {
       ref.read(koreanNamesProvider.notifier).requestIfAbsent(widget.item.id);
     }
 
+    // Types lazy fetch
+    final types = typesMap[widget.item.id];
+    if (types == null) {
+      ref.read(pokemonTypesProvider.notifier).requestIfAbsent(widget.item.id);
+    }
+
     final displayName = korName ?? _capitalize(widget.item.name);
-    // 타입 컬러를 가져오기 위해 ID 기반으로 primaryType은 추후 로드될 때까지 노말로 fallback
-    // PokemonCard는 목록에서 사용되므로 타입 정보 없이 컬러는 기본값 사용
-    // 상세 데이터 없이 spriteUrl만 사용하므로 타입은 모름 → 배경은 회색 계열 fallback
-    const bgColor = Color(0xFFF5F5F5);
+
+    // Background color based on primary type
+    final bgColor = types != null && types.isNotEmpty
+        ? TypeColors.getColor(types.first).withOpacity(0.15)
+        : const Color(0xFFF5F5F5);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -106,8 +116,7 @@ class _PokemonCardState extends ConsumerState<PokemonCard>
                   ),
                 ),
                 Padding(
-                  padding:
-                      const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -137,6 +146,21 @@ class _PokemonCardState extends ConsumerState<PokemonCard>
                     ],
                   ),
                 ),
+                // Type badges
+                if (types != null && types.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                    child: Row(
+                      children: types
+                          .map((t) => Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: TypeBadge(type: t, small: true),
+                              ))
+                          .toList(),
+                    ),
+                  )
+                else
+                  const SizedBox(height: 6),
               ],
             ),
             // 즐겨찾기 버튼

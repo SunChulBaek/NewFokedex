@@ -1,11 +1,16 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../domain/providers/pokemon_list_provider.dart';
 import '../../domain/providers/pokemon_index_provider.dart';
 import '../../domain/providers/generation_filter_provider.dart';
+import '../../domain/providers/korean_names_provider.dart';
+import '../../domain/providers/pokemon_types_provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/type_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../main.dart';
 import '../widgets/pokemon_card.dart';
 import '../widgets/pokemon_card_shimmer.dart';
 
@@ -25,6 +30,8 @@ class PokemonListPage extends ConsumerWidget {
     final searchQuery = ref.watch(searchQueryProvider);
     final selectedType = ref.watch(selectedTypeProvider);
     final selectedGen = ref.watch(selectedGenerationProvider);
+    final koreanNames = ref.watch(koreanNamesProvider);
+    final typesMap = ref.watch(pokemonTypesProvider);
 
     // 검색어가 있으면 전체 인덱스에서 검색, 없으면 페이징 목록 사용
     final baseItems =
@@ -33,11 +40,13 @@ class PokemonListPage extends ConsumerWidget {
             : state.items;
 
     // 검색 + 세대 + 타입 필터 적용
-    final filtered = baseItems.where((item) {
+    var filtered = baseItems.where((item) {
       final q = searchQuery.toLowerCase();
+      final korName = koreanNames[item.id]?.toLowerCase() ?? '';
       final matchesSearch = q.isEmpty ||
-          item.name.contains(q) ||
-          item.id.toString() == q;
+          item.name.toLowerCase().contains(q) ||
+          item.id.toString() == q ||
+          korName.contains(q);
 
       final matchesGen = selectedGen == null ||
           (() {
@@ -46,11 +55,21 @@ class PokemonListPage extends ConsumerWidget {
             return item.id >= range.start && item.id <= range.end;
           })();
 
-      // 타입 필터는 상세 연동 예정 (현재는 전체 통과)
-      final matchesType = selectedType == null;
+      // 타입 필터: 타입 정보가 없으면 표시, 있으면 필터링
+      final matchesType = selectedType == null ||
+          (() {
+            final types = typesMap[item.id];
+            if (types == null) return true; // 아직 로드 안됨 → 표시
+            return types.contains(selectedType);
+          })();
 
       return matchesSearch && matchesGen && matchesType;
     }).toList();
+
+    // 검색/필터 시 ID 오름차순 정렬
+    if (searchQuery.isNotEmpty || selectedGen != null || selectedType != null) {
+      filtered.sort((a, b) => a.id.compareTo(b.id));
+    }
 
     return Scaffold(
       body: RefreshIndicator(
@@ -67,6 +86,28 @@ class PokemonListPage extends ConsumerWidget {
                 '포켓몬 도감',
                 style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
               ),
+              actions: [
+                IconButton(
+                  icon: Icon(
+                    ref.watch(themeProvider) == ThemeMode.dark
+                        ? Icons.light_mode
+                        : ref.watch(themeProvider) == ThemeMode.light
+                            ? Icons.brightness_auto
+                            : Icons.dark_mode,
+                    color: Colors.white,
+                  ),
+                  tooltip: '테마 변경',
+                  onPressed: () {
+                    final current = ref.read(themeProvider);
+                    final next = current == ThemeMode.system
+                        ? ThemeMode.light
+                        : current == ThemeMode.light
+                            ? ThemeMode.dark
+                            : ThemeMode.system;
+                    ref.read(themeProvider.notifier).state = next;
+                  },
+                ),
+              ],
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(56),
                 child: Padding(
@@ -121,7 +162,7 @@ class PokemonListPage extends ConsumerWidget {
               )
             else if (state.items.isEmpty && state.error != null)
               SliverFillRemaining(child: _ErrorView(ref: ref))
-            else if (filtered.isEmpty && (searchQuery.isNotEmpty || selectedGen != null))
+            else if (filtered.isEmpty && (searchQuery.isNotEmpty || selectedGen != null || selectedType != null))
               const SliverFillRemaining(child: _EmptySearchView())
             else
               SliverPadding(
@@ -136,11 +177,12 @@ class PokemonListPage extends ConsumerWidget {
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      // 무한 스크롤: 검색/세대 필터 없을 때만 동작
+                      // 무한 스크롤: 검색/세대/타입 필터 없을 때만 동작
                       final isLoaderSlot = index == filtered.length &&
                           state.hasMore &&
                           searchQuery.isEmpty &&
-                          selectedGen == null;
+                          selectedGen == null &&
+                          selectedType == null;
                       if (isLoaderSlot) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           ref.read(pokemonListProvider.notifier).loadMore();
@@ -156,7 +198,7 @@ class PokemonListPage extends ConsumerWidget {
                       return PokemonCard(item: filtered[index]);
                     },
                     childCount: filtered.length +
-                        (state.hasMore && searchQuery.isEmpty && selectedGen == null
+                        (state.hasMore && searchQuery.isEmpty && selectedGen == null && selectedType == null
                             ? 1
                             : 0),
                   ),
@@ -164,6 +206,20 @@ class PokemonListPage extends ConsumerWidget {
               ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          if (!indexState.isReady) return;
+          final allItems = indexState.allItems;
+          if (allItems.isEmpty) return;
+          final random = math.Random();
+          final item = allItems[random.nextInt(allItems.length)];
+          context.push('/pokemon/${item.id}?name=${item.name}');
+        },
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+        tooltip: '랜덤 포켓몬',
+        child: const Icon(Icons.casino),
       ),
     );
   }
@@ -180,7 +236,7 @@ class _SearchBar extends StatelessWidget {
       onChanged: onChanged,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
-        hintText: '이름 또는 번호 검색...',
+        hintText: '이름, 번호, 한국어 검색...',
         hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
         prefixIcon:
             Icon(Icons.search, color: Colors.white.withOpacity(0.8)),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/providers/favorites_provider.dart';
-import '../../domain/providers/pokemon_list_provider.dart';
+import '../../domain/providers/pokemon_index_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../widgets/pokemon_card.dart';
 
@@ -11,9 +11,31 @@ class FavoritesPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final favoriteIds = ref.watch(favoritesProvider);
-    final listState = ref.watch(pokemonListProvider);
+    final indexState = ref.watch(pokemonIndexProvider);
 
-    final favoriteItems = listState.items
+    if (favoriteIds.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('즐겨찾기'),
+          backgroundColor: AppTheme.primary,
+          foregroundColor: Colors.white,
+        ),
+        body: _buildEmpty(context),
+      );
+    }
+
+    if (!indexState.isReady) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('즐겨찾기'),
+          backgroundColor: AppTheme.primary,
+          foregroundColor: Colors.white,
+        ),
+        body: _buildLoading(),
+      );
+    }
+
+    final favoriteItems = indexState.allItems
         .where((item) => favoriteIds.contains(item.id))
         .toList();
 
@@ -23,24 +45,22 @@ class FavoritesPage extends ConsumerWidget {
         backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
       ),
-      body: favoriteIds.isEmpty
+      body: favoriteItems.isEmpty
           ? _buildEmpty(context)
-          : favoriteItems.isEmpty
-              ? _buildLoading()
-              : GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.75,
-                  ),
-                  itemCount: favoriteItems.length,
-                  itemBuilder: (context, index) {
-                    return PokemonCard(item: favoriteItems[index]);
-                  },
-                ),
+          : GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate:
+                  const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 0.75,
+              ),
+              itemCount: favoriteItems.length,
+              itemBuilder: (context, index) {
+                return PokemonCard(item: favoriteItems[index]);
+              },
+            ),
     );
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../../domain/providers/pokemon_detail_provider.dart';
 import '../../domain/providers/pokemon_species_provider.dart';
 import '../../domain/providers/favorites_provider.dart';
@@ -36,6 +37,8 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
   late Animation<double> _favScale;
   late AnimationController _bounceController;
   late Animation<double> _bounceOffset;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlayingCry = false;
 
   @override
   void initState() {
@@ -68,6 +71,7 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
     _tabController.dispose();
     _favController.dispose();
     _bounceController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -261,6 +265,17 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
+              IconButton(
+                icon: _isPlayingCry
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.volume_up),
+                tooltip: '울음 소리',
+                onPressed: () => _playCry(pokemon.id),
+              ),
               Wrap(
                 spacing: 6,
                 children: pokemon.types
@@ -298,6 +313,26 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
                 fontSize: 14, fontWeight: FontWeight.w600)),
       ],
     );
+  }
+
+  Future<void> _playCry(int pokemonId) async {
+    if (_isPlayingCry) return;
+    setState(() => _isPlayingCry = true);
+    try {
+      final url =
+          'https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/$pokemonId.ogg';
+      await _audioPlayer.play(UrlSource(url));
+      _audioPlayer.onPlayerComplete.first.then((_) {
+        if (mounted) setState(() => _isPlayingCry = false);
+      });
+    } catch (e) {
+      if (mounted) setState(() => _isPlayingCry = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('울음을 재생할 수 없어요')),
+        );
+      }
+    }
   }
 
   String _capitalize(String s) =>
