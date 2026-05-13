@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/providers/pokemon_list_provider.dart';
+import '../../domain/providers/pokemon_index_provider.dart';
 import '../../domain/providers/generation_filter_provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/type_colors.dart';
@@ -20,15 +21,23 @@ class PokemonListPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(pokemonListProvider);
+    final indexState = ref.watch(pokemonIndexProvider);
     final searchQuery = ref.watch(searchQueryProvider);
     final selectedType = ref.watch(selectedTypeProvider);
     final selectedGen = ref.watch(selectedGenerationProvider);
 
+    // 검색어가 있으면 전체 인덱스에서 검색, 없으면 페이징 목록 사용
+    final baseItems =
+        searchQuery.isNotEmpty && indexState.isReady
+            ? indexState.allItems
+            : state.items;
+
     // 검색 + 세대 + 타입 필터 적용
-    final filtered = state.items.where((item) {
-      final matchesSearch = searchQuery.isEmpty ||
-          item.name.contains(searchQuery.toLowerCase()) ||
-          item.id.toString() == searchQuery;
+    final filtered = baseItems.where((item) {
+      final q = searchQuery.toLowerCase();
+      final matchesSearch = q.isEmpty ||
+          item.name.contains(q) ||
+          item.id.toString() == q;
 
       final matchesGen = selectedGen == null ||
           (() {
@@ -37,7 +46,7 @@ class PokemonListPage extends ConsumerWidget {
             return item.id >= range.start && item.id <= range.end;
           })();
 
-      // 타입 필터는 Sprint 2에서 상세 연동 예정 (현재는 전체 통과)
+      // 타입 필터는 상세 연동 예정 (현재는 전체 통과)
       final matchesType = selectedType == null;
 
       return matchesSearch && matchesGen && matchesType;
@@ -105,6 +114,10 @@ class PokemonListPage extends ConsumerWidget {
                     childCount: 10,
                   ),
                 ),
+              )
+            else if (searchQuery.isNotEmpty && indexState.isLoading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
               )
             else if (state.items.isEmpty && state.error != null)
               SliverFillRemaining(child: _ErrorView(ref: ref))

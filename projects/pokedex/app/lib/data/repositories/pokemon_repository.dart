@@ -19,6 +19,15 @@ class PokemonRepository {
 
   PokemonRepository(this._client);
 
+  /// 전체 포켓몬 인덱스 (이름 + URL) 한 번에 fetch
+  /// PokeAPI /pokemon?limit=10000 → 현재 약 1302마리
+  Future<List<PokemonListItem>> getFullPokemonIndex() async {
+    final data = await _client.getPokemonList(limit: 10000, offset: 0);
+    return (data['results'] as List)
+        .map((e) => PokemonListItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<({List<PokemonListItem> items, bool hasMore})> getPokemonList({
     required int page,
   }) async {
