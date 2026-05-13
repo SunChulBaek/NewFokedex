@@ -89,10 +89,7 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
     );
 
     return detailAsync.when(
-      loading: () => Scaffold(
-        appBar: AppBar(title: Text(_capitalize(widget.pokemonName))),
-        body: const Center(child: CircularProgressIndicator()),
-      ),
+      loading: () => _buildLoadingScaffold(),
       error: (e, _) => Scaffold(
         appBar: AppBar(title: Text(_capitalize(widget.pokemonName))),
         body: Center(
@@ -172,6 +169,70 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
           ),
         );
       },
+    );
+  }
+
+  /// 로딩 중에도 Hero 태그 유지 → 첫 번째 클릭에도 애니메이션 적용
+  Widget _buildLoadingScaffold() {
+    final artworkUrl =
+        'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${widget.pokemonId}.png';
+
+    return Scaffold(
+      body: NestedScrollView(
+        headerSliverBuilder: (context, _) => [
+          SliverAppBar(
+            expandedHeight: 280,
+            pinned: true,
+            backgroundColor: AppTheme.primary,
+            foregroundColor: Colors.white,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(color: AppTheme.primary),
+                  CustomPaint(painter: _RetroNoisePainter()),
+                  SafeArea(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 48, bottom: 16),
+                        child: AnimatedBuilder(
+                          animation: _bounceOffset,
+                          builder: (context, child) => Transform.translate(
+                            offset: Offset(0, _bounceOffset.value),
+                            child: child,
+                          ),
+                          child: Hero(
+                            tag: 'pokemon-image-${widget.pokemonId}',
+                            child: CachedNetworkImage(
+                              imageUrl: artworkUrl,
+                              height: 180,
+                              width: 180,
+                              fit: BoxFit.contain,
+                              placeholder: (context, url) => const SizedBox(
+                                height: 180,
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => const Icon(
+                                Icons.catching_pokemon,
+                                size: 120,
+                                color: Colors.white54,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        body: const Center(child: CircularProgressIndicator()),
+      ),
     );
   }
 
