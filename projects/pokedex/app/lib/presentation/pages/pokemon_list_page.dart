@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/providers/pokemon_list_provider.dart';
+import '../../domain/providers/generation_filter_provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/type_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../widgets/pokemon_card.dart';
+import '../widgets/pokemon_card_shimmer.dart';
 
 // 검색어 provider
 final searchQueryProvider = StateProvider<String>((ref) => '');
@@ -20,14 +22,25 @@ class PokemonListPage extends ConsumerWidget {
     final state = ref.watch(pokemonListProvider);
     final searchQuery = ref.watch(searchQueryProvider);
     final selectedType = ref.watch(selectedTypeProvider);
+    final selectedGen = ref.watch(selectedGenerationProvider);
 
-    // 검색 + 타입 필터 적용
+    // 검색 + 세대 + 타입 필터 적용
     final filtered = state.items.where((item) {
       final matchesSearch = searchQuery.isEmpty ||
           item.name.contains(searchQuery.toLowerCase()) ||
           item.id.toString() == searchQuery;
-      final matchesType = selectedType == null; // 타입 필터는 추후 상세 연동 (Sprint 2)
-      return matchesSearch && matchesType;
+
+      final matchesGen = selectedGen == null ||
+          (() {
+            final range = AppConstants.generationRanges[selectedGen];
+            if (range == null) return true;
+            return item.id >= range.start && item.id <= range.end;
+          })();
+
+      // 타입 필터는 Sprint 2에서 상세 연동 예정 (현재는 전체 통과)
+      final matchesType = selectedType == null;
+
+      return matchesSearch && matchesGen && matchesType;
     }).toList();
 
     return Scaffold(
@@ -43,10 +56,7 @@ class PokemonListPage extends ConsumerWidget {
               foregroundColor: Colors.white,
               title: const Text(
                 '포켓몬 도감',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
               ),
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(56),
@@ -60,24 +70,45 @@ class PokemonListPage extends ConsumerWidget {
               ),
             ),
 
-            // TypeFilterChips
+            // 세대 필터 Row
+            SliverToBoxAdapter(
+              child: _GenerationFilterRow(
+                selected: selectedGen,
+                onSelect: (gen) =>
+                    ref.read(selectedGenerationProvider.notifier).state = gen,
+              ),
+            ),
+
+            // 타입 필터 Row
             SliverToBoxAdapter(
               child: _TypeFilterRow(
                 selected: selectedType,
-                onSelect: (type) {
-                  ref.read(selectedTypeProvider.notifier).state = type;
-                },
+                onSelect: (type) =>
+                    ref.read(selectedTypeProvider.notifier).state = type,
               ),
             ),
 
             // 목록 or 상태
             if (state.items.isEmpty && state.isLoading)
-              const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
+              SliverPadding(
+                padding: const EdgeInsets.all(16),
+                sliver: SliverGrid(
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.75,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (_, __) => const PokemonCardShimmer(),
+                    childCount: 10,
+                  ),
+                ),
               )
             else if (state.items.isEmpty && state.error != null)
               SliverFillRemaining(child: _ErrorView(ref: ref))
-            else if (filtered.isEmpty && searchQuery.isNotEmpty)
+            else if (filtered.isEmpty && (searchQuery.isNotEmpty || selectedGen != null))
               const SliverFillRemaining(child: _EmptySearchView())
             else
               SliverPadding(
@@ -92,7 +123,12 @@ class PokemonListPage extends ConsumerWidget {
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      if (index == filtered.length && state.hasMore && searchQuery.isEmpty) {
+                      // 무한 스크롤: 검색/세대 필터 없을 때만 동작
+                      final isLoaderSlot = index == filtered.length &&
+                          state.hasMore &&
+                          searchQuery.isEmpty &&
+                          selectedGen == null;
+                      if (isLoaderSlot) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           ref.read(pokemonListProvider.notifier).loadMore();
                         });
@@ -107,7 +143,9 @@ class PokemonListPage extends ConsumerWidget {
                       return PokemonCard(item: filtered[index]);
                     },
                     childCount: filtered.length +
-                        (state.hasMore && searchQuery.isEmpty ? 1 : 0),
+                        (state.hasMore && searchQuery.isEmpty && selectedGen == null
+                            ? 1
+                            : 0),
                   ),
                 ),
               ),
@@ -118,19 +156,15 @@ class PokemonListPage extends ConsumerWidget {
   }
 }
 
-class _SearchBar extends StatefulWidget {
+// ─── SearchBar ────────────────────────────────────────────
+class _SearchBar extends StatelessWidget {
   final ValueChanged<String> onChanged;
   const _SearchBar({required this.onChanged});
 
   @override
-  State<_SearchBar> createState() => _SearchBarState();
-}
-
-class _SearchBarState extends State<_SearchBar> {
-  @override
   Widget build(BuildContext context) {
     return TextField(
-      onChanged: widget.onChanged,
+      onChanged: onChanged,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         hintText: '이름 또는 번호 검색...',
@@ -157,6 +191,64 @@ class _SearchBarState extends State<_SearchBar> {
   }
 }
 
+// ─── 세대 필터 Row ─────────────────────────────────────────
+class _GenerationFilterRow extends StatelessWidget {
+  final int? selected;
+  final ValueChanged<int?> onSelect;
+
+  const _GenerationFilterRow({required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: FilterChip(
+              label: const Text('전체', style: TextStyle(fontSize: 11)),
+              selected: selected == null,
+              onSelected: (_) => onSelect(null),
+              selectedColor: AppTheme.primaryContainer,
+              checkmarkColor: AppTheme.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+            ),
+          ),
+          ...List.generate(9, (i) {
+            final gen = i + 1;
+            final isSelected = selected == gen;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: FilterChip(
+                label: Text(
+                  AppConstants.generationLabels[i],
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isSelected ? Colors.white : null,
+                  ),
+                ),
+                selected: isSelected,
+                onSelected: (_) => onSelect(isSelected ? null : gen),
+                selectedColor: AppTheme.secondary,
+                backgroundColor: const Color(0xFFF5F5F5),
+                side: BorderSide(
+                  color: isSelected ? AppTheme.secondary : AppTheme.outline,
+                ),
+                showCheckmark: false,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── 타입 필터 Row ─────────────────────────────────────────
 class _TypeFilterRow extends StatelessWidget {
   final String? selected;
   final ValueChanged<String?> onSelect;
@@ -166,35 +258,34 @@ class _TypeFilterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 48,
+      height: 44,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         children: [
-          // 전체 칩
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(right: 6),
             child: FilterChip(
-              label: const Text('전체'),
+              label: const Text('전체타입', style: TextStyle(fontSize: 11)),
               selected: selected == null,
               onSelected: (_) => onSelect(null),
               selectedColor: AppTheme.primaryContainer,
               checkmarkColor: AppTheme.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
             ),
           ),
-          // 타입 칩
           ...AppConstants.pokemonTypes.map((type) {
             final typeColor = TypeColors.getColor(type);
             final korName = TypeColors.getKoreanName(type);
             final isSelected = selected == type;
             return Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: 6),
               child: FilterChip(
                 label: Text(
                   korName,
                   style: TextStyle(
                     color: isSelected ? Colors.white : null,
-                    fontSize: 12,
+                    fontSize: 11,
                   ),
                 ),
                 selected: isSelected,
@@ -205,6 +296,7 @@ class _TypeFilterRow extends StatelessWidget {
                   color: isSelected ? typeColor : AppTheme.outline,
                 ),
                 showCheckmark: false,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
               ),
             );
           }),
@@ -214,6 +306,7 @@ class _TypeFilterRow extends StatelessWidget {
   }
 }
 
+// ─── Error / Empty 뷰 ─────────────────────────────────────
 class _ErrorView extends StatelessWidget {
   final WidgetRef ref;
   const _ErrorView({required this.ref});
@@ -226,8 +319,7 @@ class _ErrorView extends StatelessWidget {
         children: [
           const Icon(Icons.error_outline, size: 64, color: Colors.red),
           const SizedBox(height: 16),
-          Text('불러오기 실패',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text('불러오기 실패', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           ElevatedButton(
             onPressed: () =>
