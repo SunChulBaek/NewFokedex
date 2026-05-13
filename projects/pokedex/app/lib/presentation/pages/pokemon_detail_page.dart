@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../domain/providers/pokemon_detail_provider.dart';
+import '../../domain/providers/pokemon_species_provider.dart';
 import '../../domain/providers/favorites_provider.dart';
 import '../../core/constants/type_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/pokemon_detail.dart';
 import '../widgets/type_badge.dart';
 import '../widgets/stat_bar.dart';
+import '../widgets/evolution_chain_widget.dart';
 
 class PokemonDetailPage extends ConsumerStatefulWidget {
   final int pokemonId;
@@ -35,7 +37,7 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this); // 능력치/특성/진화
     _favController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -58,27 +60,29 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
 
   @override
   Widget build(BuildContext context) {
-    final detailAsync =
-        ref.watch(pokemonDetailProvider(widget.pokemonId));
-    final isFav =
-        ref.watch(favoritesProvider).contains(widget.pokemonId);
+    final detailAsync = ref.watch(pokemonDetailProvider(widget.pokemonId));
+    final speciesAsync = ref.watch(pokemonSpeciesProvider(widget.pokemonId));
+    final isFav = ref.watch(favoritesProvider).contains(widget.pokemonId);
+
+    // 한국어 이름: species에서 로드, 없으면 영어 capitalize 사용
+    final koreanName = speciesAsync.when(
+      data: (s) => s.koreanName,
+      loading: () => null,
+      error: (_, __) => null,
+    );
 
     return detailAsync.when(
       loading: () => Scaffold(
-        appBar:
-            AppBar(title: Text(_capitalize(widget.pokemonName))),
-        body:
-            const Center(child: CircularProgressIndicator()),
+        appBar: AppBar(title: Text(_capitalize(widget.pokemonName))),
+        body: const Center(child: CircularProgressIndicator()),
       ),
       error: (e, _) => Scaffold(
-        appBar:
-            AppBar(title: Text(_capitalize(widget.pokemonName))),
+        appBar: AppBar(title: Text(_capitalize(widget.pokemonName))),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline,
-                  size: 64, color: Colors.red),
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
               const SizedBox(height: 16),
               Text(e.toString()),
             ],
@@ -86,15 +90,16 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
         ),
       ),
       data: (pokemon) {
-        final type1Color =
-            TypeColors.getColor(pokemon.primaryType);
+        final displayName =
+            koreanName ?? _capitalize(pokemon.name);
+        final type1Color = TypeColors.getColor(pokemon.primaryType);
         final type2Color = pokemon.types.length > 1
             ? TypeColors.getColor(pokemon.types[1].type.name)
             : Colors.white;
 
         return Scaffold(
           body: NestedScrollView(
-            headerSliverBuilder: (context, innerBoxScrolled) => [
+            headerSliverBuilder: (context, _) => [
               SliverAppBar(
                 expandedHeight: 280,
                 pinned: true,
@@ -105,9 +110,7 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
                     scale: _favScale,
                     child: IconButton(
                       icon: Icon(
-                        isFav
-                            ? Icons.favorite
-                            : Icons.favorite_outline,
+                        isFav ? Icons.favorite : Icons.favorite_outline,
                         color: Colors.white,
                       ),
                       onPressed: () {
@@ -121,30 +124,29 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
                   ),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
-                  background: _buildHeader(
-                      pokemon, type1Color, type2Color),
+                  background:
+                      _buildHeader(pokemon, type1Color, type2Color),
                 ),
               ),
             ],
             body: Column(
               children: [
-                // 포켓몬 이름 + 번호 + 타입 배지
-                _buildNameSection(context, pokemon, type1Color),
-                // TabBar
+                _buildNameSection(context, pokemon, displayName),
                 TabBar(
                   controller: _tabController,
                   tabs: const [
                     Tab(text: '능력치'),
                     Tab(text: '특성'),
+                    Tab(text: '진화'),
                   ],
                 ),
-                // TabBarView
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: [
                       _StatsTab(pokemon: pokemon),
                       _AbilitiesTab(pokemon: pokemon),
+                      _EvolutionTab(pokemonId: widget.pokemonId),
                     ],
                   ),
                 ),
@@ -185,8 +187,7 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
                 placeholder: (context, url) => const SizedBox(
                   height: 180,
                   child: Center(
-                    child: CircularProgressIndicator(
-                        color: Colors.white),
+                    child: CircularProgressIndicator(color: Colors.white),
                   ),
                 ),
                 errorWidget: (context, url, error) => const Icon(
@@ -203,7 +204,7 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
   }
 
   Widget _buildNameSection(
-      BuildContext context, PokemonDetail pokemon, Color typeColor) {
+      BuildContext context, PokemonDetail pokemon, String displayName) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
@@ -222,7 +223,7 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
             children: [
               Expanded(
                 child: Text(
-                  _capitalize(pokemon.name),
+                  displayName,
                   style: Theme.of(context)
                       .textTheme
                       .headlineLarge
@@ -280,7 +281,6 @@ class _StatsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = pokemon.stats.fold(0, (sum, s) => sum + s.baseStat);
-
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
@@ -300,11 +300,9 @@ class _StatsTab extends StatelessWidget {
             children: [
               const SizedBox(
                 width: 56,
-                child: Text(
-                  '합계',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 13),
-                ),
+                child: Text('합계',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13)),
               ),
               const SizedBox(width: 8),
               Text(
@@ -340,25 +338,19 @@ class _AbilitiesTab extends StatelessWidget {
             child: ListTile(
               leading: Icon(
                 a.isHidden ? Icons.star : Icons.auto_awesome,
-                color: a.isHidden
-                    ? Colors.amber
-                    : AppTheme.primary,
+                color: a.isHidden ? Colors.amber : AppTheme.primary,
               ),
               title: Text(
-                _capitalize(
-                    a.ability.name.replaceAll('-', ' ')),
+                _capitalize(a.ability.name.replaceAll('-', ' ')),
                 style: Theme.of(context)
                     .textTheme
                     .titleSmall
                     ?.copyWith(fontWeight: FontWeight.w600),
               ),
               subtitle: a.isHidden
-                  ? const Text(
-                      '숨겨진 특성',
-                      style: TextStyle(
-                          color: Colors.amber,
-                          fontSize: 11),
-                    )
+                  ? const Text('숨겨진 특성',
+                      style:
+                          TextStyle(color: Colors.amber, fontSize: 11))
                   : null,
             ),
           );
@@ -369,4 +361,33 @@ class _AbilitiesTab extends StatelessWidget {
 
   String _capitalize(String s) =>
       s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+}
+
+// ─── 진화 탭 ─────────────────────────────────────────────
+class _EvolutionTab extends StatelessWidget {
+  final int pokemonId;
+  const _EvolutionTab({required this.pokemonId});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+            child: Text(
+              '진화 체인',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          EvolutionChainWidget(pokemonId: pokemonId),
+        ],
+      ),
+    );
+  }
 }
