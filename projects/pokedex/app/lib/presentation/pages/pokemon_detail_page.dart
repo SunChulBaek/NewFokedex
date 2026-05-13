@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,10 +30,12 @@ class PokemonDetailPage extends ConsumerStatefulWidget {
 }
 
 class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
   late AnimationController _favController;
   late Animation<double> _favScale;
+  late AnimationController _bounceController;
+  late Animation<double> _bounceOffset;
 
   @override
   void initState() {
@@ -49,12 +52,22 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
       parent: _favController,
       curve: Curves.easeInOut,
     ));
+
+    // 바운스 애니메이션: 위아래 살랑이기
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _bounceOffset = Tween<double>(begin: 0, end: -10).animate(
+      CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
+    );
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _favController.dispose();
+    _bounceController.dispose();
     super.dispose();
   }
 
@@ -160,46 +173,64 @@ class _PokemonDetailPageState extends ConsumerState<PokemonDetailPage>
 
   Widget _buildHeader(
       PokemonDetail pokemon, Color type1Color, Color type2Color) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            type1Color,
-            type2Color == Colors.white
-                ? type1Color.withOpacity(0.6)
-                : type2Color,
-          ],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 배경 그라데이션
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                type1Color,
+                type2Color == Colors.white
+                    ? type1Color.withOpacity(0.6)
+                    : type2Color,
+              ],
+            ),
+          ),
         ),
-      ),
-      child: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 48, bottom: 16),
-            child: Hero(
-              tag: 'pokemon-image-${pokemon.id}',
-              child: CachedNetworkImage(
-                imageUrl: pokemon.officialArtworkUrl,
-                height: 180,
-                width: 180,
-                fit: BoxFit.contain,
-                placeholder: (context, url) => const SizedBox(
-                  height: 180,
-                  child: Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  ),
+        // 레트로 노이즈 오버레이
+        CustomPaint(
+          painter: _RetroNoisePainter(),
+        ),
+        // 포켓몬 이미지 + 바운스
+        SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 48, bottom: 16),
+              child: AnimatedBuilder(
+                animation: _bounceOffset,
+                builder: (context, child) => Transform.translate(
+                  offset: Offset(0, _bounceOffset.value),
+                  child: child,
                 ),
-                errorWidget: (context, url, error) => const Icon(
-                  Icons.catching_pokemon,
-                  size: 120,
-                  color: Colors.white54,
+                child: Hero(
+                  tag: 'pokemon-image-${pokemon.id}',
+                  child: CachedNetworkImage(
+                    imageUrl: pokemon.officialArtworkUrl,
+                    height: 180,
+                    width: 180,
+                    fit: BoxFit.contain,
+                    placeholder: (context, url) => const SizedBox(
+                      height: 180,
+                      child: Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => const Icon(
+                      Icons.catching_pokemon,
+                      size: 120,
+                      color: Colors.white54,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -390,4 +421,48 @@ class _EvolutionTab extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── 레트로 노이즈 Painter ────────────────────────────────
+class _RetroNoisePainter extends CustomPainter {
+  final _rng = math.Random();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 1. 스캔라인 (수평 줄)
+    final scanPaint = Paint()
+      ..color = Colors.black.withOpacity(0.10)
+      ..strokeWidth = 1.0;
+    for (double y = 0; y < size.height; y += 3) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), scanPaint);
+    }
+
+    // 2. 랜덤 정전기 픽셀
+    final noisePaint = Paint()..strokeWidth = 1.5;
+    final pixelCount = (size.width * size.height * 0.012).toInt();
+    for (int i = 0; i < pixelCount; i++) {
+      final x = _rng.nextDouble() * size.width;
+      final y = _rng.nextDouble() * size.height;
+      final bright = _rng.nextBool();
+      noisePaint.color = (bright ? Colors.white : Colors.black)
+          .withOpacity(_rng.nextDouble() * 0.35 + 0.05);
+      canvas.drawCircle(Offset(x, y), 0.8, noisePaint);
+    }
+
+    // 3. 가벼운 비네팅
+    final vignettePaint = Paint()
+      ..shader = RadialGradient(
+        center: Alignment.center,
+        radius: 1.0,
+        colors: [Colors.transparent, Colors.black.withOpacity(0.25)],
+        stops: const [0.55, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      vignettePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
