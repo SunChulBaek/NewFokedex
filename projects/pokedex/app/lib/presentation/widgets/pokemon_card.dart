@@ -167,24 +167,20 @@ class _PokemonCardState extends ConsumerState<PokemonCard>
             ),
             // 즐겨찾기 버튼
             Positioned(
-              top: 4,
-              right: 4,
+              top: 2,
+              right: 2,
               child: ScaleTransition(
                 scale: _favScale,
-                child: IconButton(
-                  iconSize: 20,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
+                child: GestureDetector(
+                  onTap: _toggleFavorite,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      isFav ? Icons.favorite : Icons.favorite_outline,
+                      size: 14,
+                      color: isFav ? AppTheme.primary : AppTheme.outline,
+                    ),
                   ),
-                  icon: Icon(
-                    isFav ? Icons.favorite : Icons.favorite_outline,
-                    color: isFav
-                        ? AppTheme.primary
-                        : AppTheme.outline,
-                  ),
-                  onPressed: _toggleFavorite,
                 ),
               ),
             ),
