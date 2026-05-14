@@ -116,7 +116,7 @@ class _PokemonCardState extends ConsumerState<PokemonCard>
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                  padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -129,16 +129,18 @@ class _PokemonCardState extends ConsumerState<PokemonCard>
                               color: const Color(0xFF757575),
                               fontFamily: 'Rajdhani',
                               fontWeight: FontWeight.w600,
+                              fontSize: 10,
                             ),
                       ),
                       Text(
                         displayName,
                         style: Theme.of(context)
                             .textTheme
-                            .titleMedium
+                            .bodySmall
                             ?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: const Color(0xFF1C1B1F),
+                              fontSize: 11,
                             ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

@@ -152,10 +152,10 @@ class PokemonListPage extends ConsumerWidget {
                 sliver: SliverGrid(
                   gridDelegate:
                       const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
+                    crossAxisCount: 3,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 0.75,
+                    childAspectRatio: 0.72,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (_, __) => const PokemonCardShimmer(),
@@ -181,10 +181,10 @@ class PokemonListPage extends ConsumerWidget {
                 sliver: SliverGrid(
                   gridDelegate:
                       const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
+                    crossAxisCount: 3,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 0.75,
+                    childAspectRatio: 0.72,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
